@@ -1,5 +1,6 @@
 <template>
-  <div class="settings-card provider-card">
+  <div class="provider-setting-shell">
+    <div v-if="!dialogVisible" class="settings-card provider-card">
     <div class="card-title provider-title">
       <div class="title-copy">
         <span>多服务商发件</span>
@@ -57,9 +58,9 @@
         </div>
       </div>
     </div>
+    </div>
 
-    <Teleport to="body">
-      <div v-if="dialogVisible" class="provider-config-page" @keydown.esc="closeConfig" tabindex="-1">
+    <div v-else class="provider-config-view" @keydown.esc="closeConfig" tabindex="-1">
         <header class="provider-config-header">
           <el-button text circle class="back-button" :disabled="saving" @click="closeConfig" aria-label="返回系统设置">
             <Icon icon="mingcute:left-line" width="24" />
@@ -71,7 +72,7 @@
           <el-button type="primary" :loading="saving" @click="save">保存</el-button>
         </header>
 
-        <main class="provider-config-main" @wheel.stop @touchmove.stop>
+        <main class="provider-config-main">
           <section class="config-intro">
             <Icon icon="solar:shield-keyhole-linear" width="23" />
             <div>
@@ -96,7 +97,7 @@
             <div class="section-heading">
               <div>
                 <h2>故障切换顺序</h2>
-                <p>从上到下依次尝试；手机使用上下按钮，电脑也可拖动</p>
+                <p>从上到下依次尝试；使用右侧上下按钮调整顺序</p>
               </div>
               <el-button link type="primary" @click="resetPriority">恢复默认</el-button>
             </div>
@@ -106,14 +107,7 @@
                   v-for="(provider, index) in orderedProviders"
                   :key="provider.key"
                   class="priority-item"
-                  :class="{ dragging: dragIndex === index }"
-                  draggable="true"
-                  @dragstart="onDragStart(index)"
-                  @dragover.prevent
-                  @drop="onDrop(index)"
-                  @dragend="dragIndex = -1"
               >
-                <Icon class="drag-handle" icon="mingcute:dots-line" width="20" />
                 <span class="priority-number">{{ index + 1 }}</span>
                 <button type="button" class="priority-provider" @click="focusProvider(provider.key)">
                   <strong>{{ provider.name }}</strong>
@@ -235,14 +229,15 @@
             </div>
           </section>
         </main>
-      </div>
-    </Teleport>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
+
+const emit = defineEmits(['view-change']);
 
 const props = defineProps({
   setting: { type: Object, required: true },
@@ -265,10 +260,10 @@ const selectedDomain = ref('');
 const dialogVisible = ref(false);
 const focusedProvider = ref('');
 const priority = ref([...defaultPriority]);
-const dragIndex = ref(-1);
 const localSaving = ref(false);
 const saving = computed(() => props.loading || localSaving.value);
 const form = reactive(defaultForm());
+let previousScrollTop = 0;
 
 function defaultForm() {
   return {
@@ -302,16 +297,37 @@ function loadForm() {
   priority.value = normalizePriority(props.setting?.providerPriority);
 }
 
-function openDialog() {
+function getSettingsScrollWrap() {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector('.settings-container .el-scrollbar__wrap');
+}
+
+async function showConfig() {
+  const wrap = getSettingsScrollWrap();
+  previousScrollTop = Number(wrap?.scrollTop || 0);
+  dialogVisible.value = true;
+  emit('view-change', true);
+  await nextTick();
+  getSettingsScrollWrap()?.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+async function hideConfig({ restore = true } = {}) {
+  dialogVisible.value = false;
+  emit('view-change', false);
+  await nextTick();
+  if (restore) getSettingsScrollWrap()?.scrollTo({ top: previousScrollTop, behavior: 'auto' });
+}
+
+async function openDialog() {
   loadForm();
   focusedProvider.value = '';
-  dialogVisible.value = true;
+  await showConfig();
 }
 
 async function openProvider(key) {
   loadForm();
   focusedProvider.value = key;
-  dialogVisible.value = true;
+  await showConfig();
   await nextTick();
   document.getElementById(`provider-config-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   window.setTimeout(() => {
@@ -331,7 +347,7 @@ async function focusProvider(key) {
 function closeConfig() {
   if (saving.value) return;
   loadForm();
-  dialogVisible.value = false;
+  void hideConfig();
 }
 
 function providerEnabled(key) {
@@ -370,19 +386,6 @@ function moveProvider(index, step) {
   priority.value = list;
 }
 
-function onDragStart(index) {
-  dragIndex.value = index;
-}
-
-function onDrop(index) {
-  if (dragIndex.value < 0 || dragIndex.value === index) return;
-  const list = [...priority.value];
-  const [moved] = list.splice(dragIndex.value, 1);
-  list.splice(index, 0, moved);
-  priority.value = list;
-  dragIndex.value = -1;
-}
-
 function resetPriority() {
   priority.value = [...defaultPriority];
 }
@@ -397,7 +400,7 @@ async function save() {
         [selectedDomain.value]: JSON.parse(JSON.stringify(form))
       }
     });
-    dialogVisible.value = false;
+    await hideConfig();
   } catch (error) {
     console.error('保存服务商配置失败：', error);
   } finally {
@@ -452,22 +455,13 @@ async function clearDomain() {
         [selectedDomain.value]: { clear: true }
       }
     });
-    dialogVisible.value = false;
+    await hideConfig();
   } catch (error) {
     console.error('清除域名服务商配置失败：', error);
   } finally {
     localSaving.value = false;
   }
 }
-
-watch(dialogVisible, visible => {
-  if (typeof document === 'undefined') return;
-  document.documentElement.classList.toggle('provider-config-open', visible);
-});
-
-onUnmounted(() => {
-  if (typeof document !== 'undefined') document.documentElement.classList.remove('provider-config-open');
-});
 
 watch(normalizedDomains, domains => {
   if (!selectedDomain.value || !domains.includes(selectedDomain.value)) selectedDomain.value = domains[0] || '';
@@ -480,16 +474,12 @@ watch(() => props.setting?.providerPriority, value => {
 </script>
 
 <style scoped lang="scss">
-:global(html.provider-config-open),
-:global(html.provider-config-open body) {
-  overflow: hidden !important;
-  overscroll-behavior: none;
-}
-
-.provider-card,
-.provider-card * {
+.provider-setting-shell,
+.provider-setting-shell * {
   box-sizing: border-box;
 }
+
+.provider-setting-shell { width: 100%; min-width: 0; }
 
 .provider-card {
   width: 100%;
@@ -506,6 +496,14 @@ watch(() => props.setting?.providerPriority, value => {
 .provider-summary,
 .provider-form-head,
 .section-heading,
+
+.provider-config-view,
+.provider-config-main,
+.priority-list,
+.priority-item {
+  -webkit-user-drag: none;
+}
+
 .provider-config-header {
   display: flex;
   align-items: center;
@@ -595,19 +593,10 @@ watch(() => props.setting?.providerPriority, value => {
 .priority-node { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 8px; border-radius: 999px; background: var(--el-fill-color); font-size: 12px; }
 .priority-node.active { color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-weight: 650; }
 
-.provider-config-page {
-  position: fixed;
-  inset: 0;
-  z-index: 4000;
-  width: 100vw;
-  max-width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
-  touch-action: auto;
+.provider-config-view {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
   color: var(--el-text-color-primary);
   background:
       radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--el-color-primary) 18%, transparent), transparent 32%),
@@ -615,10 +604,12 @@ watch(() => props.setting?.providerPriority, value => {
       var(--el-bg-color-page);
 }
 
+
 .provider-config-header {
   position: sticky;
   top: 0;
   z-index: 20;
+  flex: 0 0 auto;
   min-height: 66px;
   padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
   border-bottom: 1px solid color-mix(in srgb, var(--el-border-color) 78%, transparent);
@@ -633,15 +624,11 @@ watch(() => props.setting?.providerPriority, value => {
 .provider-config-main {
   width: 100%;
   min-width: 0;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: scroll;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overflow: visible;
   touch-action: auto;
-  scrollbar-gutter: stable;
-  padding: 20px max(16px, env(safe-area-inset-right)) max(36px, calc(24px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-left));
+  padding: 20px max(16px, env(safe-area-inset-right)) max(72px, calc(40px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-left));
 }
+
 .provider-config-main > * { width: min(860px, 100%); margin-left: auto; margin-right: auto; box-sizing: border-box; }
 
 .config-intro {
@@ -671,17 +658,16 @@ watch(() => props.setting?.providerPriority, value => {
 .priority-item {
   min-width: 0;
   display: grid;
-  grid-template-columns: 22px 28px minmax(0, 1fr) auto auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   padding: 9px 10px;
   border-radius: 13px;
   border: 1px solid var(--el-border-color-lighter);
   background: color-mix(in srgb, var(--el-bg-color) 92%, transparent);
-  transition: opacity .15s ease, transform .15s ease, border-color .15s ease;
+  transition: border-color .15s ease, background .15s ease;
+  touch-action: pan-y pinch-zoom;
 }
-.priority-item.dragging { opacity: .5; transform: scale(.99); }
-.drag-handle { color: var(--el-text-color-placeholder); cursor: grab; }
 .priority-number { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 9px; background: var(--el-color-primary-light-9); color: var(--el-color-primary); font-weight: 750; }
 .priority-provider { min-width: 0; padding: 0; border: 0; color: inherit; background: transparent; display: flex; flex-direction: column; text-align: left; cursor: pointer; }
 .priority-provider strong,
@@ -731,18 +717,6 @@ watch(() => props.setting?.providerPriority, value => {
 .domain-danger-zone strong { color: var(--el-color-danger); }
 .domain-danger-zone p { margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.55; }
 
-.provider-config-main::-webkit-scrollbar { width: 10px; }
-.provider-config-main::-webkit-scrollbar-track { background: transparent; }
-.provider-config-main::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--el-text-color-placeholder) 55%, transparent);
-  background-clip: padding-box;
-}
-.provider-config-main::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--el-text-color-secondary) 68%, transparent);
-  background-clip: padding-box;
-}
 
 @media (max-width: 860px) {
   .provider-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -760,13 +734,12 @@ watch(() => props.setting?.providerPriority, value => {
   .provider-chip-text small { font-size: 11px; }
   .priority-flow > svg { display: none; }
   .priority-node { flex: 1 1 calc(50% - 6px); text-align: center; }
-
   .provider-config-header { gap: 8px; }
   .provider-config-header > .el-button:last-child { min-width: 64px; }
   .provider-config-main { padding-top: 14px; }
   .config-section { padding: 15px; border-radius: 16px; }
   .section-heading { align-items: flex-start; }
-  .priority-item { grid-template-columns: 20px 28px minmax(0, 1fr) auto; padding: 9px 8px; }
+  .priority-item { grid-template-columns: 28px minmax(0, 1fr) auto; padding: 9px 8px; }
   .priority-status { display: none; }
   .priority-actions { gap: 2px; }
   .priority-actions :deep(.el-button) { width: 30px; height: 30px; }

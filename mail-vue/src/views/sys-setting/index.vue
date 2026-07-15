@@ -3,9 +3,9 @@
     <div class="loading" :class="firstLoading ? 'loading-show' : 'loading-hide'">
       <loading/>
     </div>
-    <el-scrollbar class="scroll" v-if="!firstLoading">
+    <el-scrollbar class="scroll" :class="{ 'provider-config-scroll': providerConfigOpen }" v-if="!firstLoading">
       <div class="scroll-body">
-        <div class="card-grid">
+        <div class="card-grid" :class="{ 'provider-config-mode': providerConfigOpen }">
           <!-- Website Settings Card -->
           <div class="settings-card">
             <div class="card-title">{{ $t('websiteSetting') }}</div>
@@ -181,10 +181,12 @@
 
 
           <ProviderSetting
+              class="provider-setting-host"
               :setting="setting"
               :domains="settingStore.domainList"
               :loading="settingLoading"
               :save-handler="editSetting"
+              @view-change="providerConfigOpen = $event"
           />
 
           <!-- Object Storage Card -->
@@ -745,6 +747,7 @@ const hasUpdate = ref(false)
 let getUpdateErrorCount = 1;
 const {t, locale} = useI18n();
 const firstLoading = ref(true)
+const providerConfigOpen = ref(false)
 const backgroundImage = ref('')
 const localUpShow = ref(false)
 const accountStore = useAccountStore();
@@ -1369,6 +1372,30 @@ async function editSetting(settingForm, refreshStatus = true) {
     flex-direction: column;
     justify-content: space-between;
   }
+}
+
+.scroll.provider-config-scroll {
+  :deep(.el-scrollbar__view) {
+    height: auto;
+    min-height: 100%;
+  }
+}
+
+.card-grid.provider-config-mode {
+  display: block;
+  min-height: 100%;
+  padding: 0;
+}
+
+.card-grid.provider-config-mode > *:not(.provider-setting-host) {
+  display: none !important;
+}
+
+.card-grid.provider-config-mode > .provider-setting-host {
+  display: block;
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
 }
 
 .card-grid {
