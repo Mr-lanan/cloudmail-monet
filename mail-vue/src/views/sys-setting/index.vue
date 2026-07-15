@@ -1382,17 +1382,28 @@ async function editSetting(settingForm, refreshStatus = true) {
 }
 
 .card-grid {
-
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
   padding: 20px;
   gap: 20px;
-  @media (max-width: 500px) {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+
+  > * {
+    min-width: 0;
+    max-width: 100%;
   }
+
   @media (max-width: 1023px) {
     gap: 15px;
     padding: 15px;
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+    gap: 12px;
   }
 }
 
