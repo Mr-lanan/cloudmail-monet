@@ -1,6 +1,5 @@
 <template>
-  <div class="provider-setting-shell">
-    <div v-if="!dialogVisible" class="settings-card provider-card">
+  <div class="settings-card provider-card">
     <div class="card-title provider-title">
       <div class="title-copy">
         <span>多服务商发件</span>
@@ -23,7 +22,7 @@
           <strong>{{ configuredCount }}</strong>
           <span>配置完整</span>
         </div>
-        <el-button type="primary" @click="openDialog" :disabled="!selectedDomain">
+        <el-button type="primary" :disabled="!selectedDomain" @click="openDialog">
           <Icon icon="fluent:mail-settings-24-regular" width="18" />
           配置服务商
         </el-button>
@@ -58,186 +57,191 @@
         </div>
       </div>
     </div>
-    </div>
 
-    <div v-else class="provider-config-view" @keydown.esc="closeConfig" tabindex="-1">
-        <header class="provider-config-header">
-          <el-button text circle class="back-button" :disabled="saving" @click="closeConfig" aria-label="返回系统设置">
-            <Icon icon="mingcute:left-line" width="24" />
-          </el-button>
-          <div class="config-header-title">
-            <strong>多服务商发件设置</strong>
-            <small>{{ selectedDomain || '未选择域名' }}</small>
+    <el-dialog
+        v-model="dialogVisible"
+        class="provider-config-dialog"
+        append-to-body
+        :close-on-click-modal="false"
+        :close-on-press-escape="!saving"
+        :show-close="!saving"
+        :before-close="beforeDialogClose"
+        width="min(960px, calc(100vw - 24px))"
+    >
+      <template #header>
+        <div class="dialog-title">
+          <strong>多服务商发件设置</strong>
+          <small>{{ selectedDomain || '未选择域名' }}</small>
+        </div>
+      </template>
+
+      <div ref="dialogScrollRef" class="provider-dialog-scroll">
+        <section class="config-intro">
+          <Icon icon="solar:shield-keyhole-linear" width="23" />
+          <div>
+            <strong>密钥会加密保存</strong>
+            <p>掩码内容保持不变即可保留原密钥。未启用或配置不完整的服务商会自动跳过。</p>
           </div>
-          <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-        </header>
+        </section>
 
-        <main class="provider-config-main">
-          <section class="config-intro">
-            <Icon icon="solar:shield-keyhole-linear" width="23" />
+        <section class="config-section domain-section">
+          <div class="section-heading">
             <div>
-              <strong>密钥会加密保存</strong>
-              <p>掩码内容保持不变即可保留原密钥。未启用或配置不完整的服务商会自动跳过。</p>
+              <h2>发件域名</h2>
+              <p>所有服务商配置都按域名单独保存</p>
             </div>
-          </section>
+          </div>
+          <el-select v-model="selectedDomain" style="width: 100%" @change="loadForm">
+            <el-option v-for="domain in normalizedDomains" :key="domain" :label="domain" :value="domain" />
+          </el-select>
+        </section>
 
-          <section class="config-section domain-section">
-            <div class="section-heading">
-              <div>
-                <h2>发件域名</h2>
-                <p>所有服务商配置都按域名单独保存</p>
-              </div>
+        <section class="config-section priority-section">
+          <div class="section-heading">
+            <div>
+              <h2>故障切换顺序</h2>
+              <p>从上到下依次尝试；只使用上下按钮调整，避免触摸拖动冲突</p>
             </div>
-            <el-select v-model="selectedDomain" @change="loadForm" style="width: 100%">
-              <el-option v-for="domain in normalizedDomains" :key="domain" :label="domain" :value="domain" />
-            </el-select>
-          </section>
+            <el-button link type="primary" @click="resetPriority">恢复默认</el-button>
+          </div>
 
-          <section class="config-section priority-section">
-            <div class="section-heading">
-              <div>
-                <h2>故障切换顺序</h2>
-                <p>从上到下依次尝试；使用右侧上下按钮调整顺序</p>
-              </div>
-              <el-button link type="primary" @click="resetPriority">恢复默认</el-button>
-            </div>
-
-            <div class="priority-list">
-              <div
-                  v-for="(provider, index) in orderedProviders"
-                  :key="provider.key"
-                  class="priority-item"
+          <div class="priority-list">
+            <div v-for="(provider, index) in orderedProviders" :key="provider.key" class="priority-item">
+              <span class="priority-number">{{ index + 1 }}</span>
+              <button type="button" class="priority-provider" @click="focusProvider(provider.key)">
+                <strong>{{ provider.name }}</strong>
+                <small>{{ providerStatusText(provider.key) }}</small>
+              </button>
+              <el-tag
+                  class="priority-status"
+                  size="small"
+                  round
+                  :type="providerEnabled(provider.key) ? (providerConfigured(provider.key) ? 'success' : 'warning') : 'info'"
               >
-                <span class="priority-number">{{ index + 1 }}</span>
-                <button type="button" class="priority-provider" @click="focusProvider(provider.key)">
-                  <strong>{{ provider.name }}</strong>
-                  <small>{{ providerStatusText(provider.key) }}</small>
-                </button>
-                <el-tag
-                    class="priority-status"
-                    size="small"
-                    round
-                    :type="providerEnabled(provider.key) ? (providerConfigured(provider.key) ? 'success' : 'warning') : 'info'"
-                >
-                  {{ providerEnabled(provider.key) ? (providerConfigured(provider.key) ? '可用' : '缺少配置') : '未启用' }}
-                </el-tag>
-                <div class="priority-actions">
-                  <el-button circle size="small" :disabled="index === 0" @click="moveProvider(index, -1)">
-                    <Icon icon="mingcute:up-line" width="16" />
-                  </el-button>
-                  <el-button circle size="small" :disabled="index === orderedProviders.length - 1" @click="moveProvider(index, 1)">
-                    <Icon icon="mingcute:down-line" width="16" />
-                  </el-button>
-                </div>
+                {{ providerEnabled(provider.key) ? (providerConfigured(provider.key) ? '可用' : '缺少配置') : '未启用' }}
+              </el-tag>
+              <div class="priority-actions">
+                <el-button circle size="small" :disabled="index === 0" @click="moveProvider(index, -1)">
+                  <Icon icon="mingcute:up-line" width="16" />
+                </el-button>
+                <el-button circle size="small" :disabled="index === orderedProviders.length - 1" @click="moveProvider(index, 1)">
+                  <Icon icon="mingcute:down-line" width="16" />
+                </el-button>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <section class="config-section provider-section">
-            <div class="section-heading">
-              <div>
-                <h2>服务商配置</h2>
-                <p>五家服务商分别独立配置，所有配置项直接显示，不再依赖选项卡切换</p>
-              </div>
+        <section class="config-section provider-section">
+          <div class="section-heading">
+            <div>
+              <h2>服务商配置</h2>
+              <p>五家服务商分别独立配置，所有配置项直接显示</p>
             </div>
+          </div>
 
-            <div class="provider-forms-list">
-              <article
-                  v-for="provider in providers"
-                  :id="`provider-config-${provider.key}`"
-                  :key="provider.key"
-                  class="provider-form provider-config-block"
-                  :class="[providerStatusClass(provider.key), { focused: focusedProvider === provider.key }]"
-              >
-                <div class="provider-form-head">
-                  <div class="provider-identity">
-                    <span class="provider-mark">{{ provider.short }}</span>
-                    <div>
-                      <h3>{{ provider.name }}</h3>
-                      <p>{{ provider.description }}</p>
-                    </div>
-                  </div>
-                  <div class="enable-control">
-                    <span>{{ form[provider.key].enabled ? '已启用' : '未启用' }}</span>
-                    <el-switch v-model="form[provider.key].enabled" :active-value="1" :inactive-value="0" />
+          <div class="provider-forms-list">
+            <article
+                v-for="provider in providers"
+                :id="`provider-config-${provider.key}`"
+                :key="provider.key"
+                class="provider-form"
+                :class="[providerStatusClass(provider.key), { focused: focusedProvider === provider.key }]"
+            >
+              <div class="provider-form-head">
+                <div class="provider-identity">
+                  <span class="provider-mark">{{ provider.short }}</span>
+                  <div>
+                    <h3>{{ provider.name }}</h3>
+                    <p>{{ provider.description }}</p>
                   </div>
                 </div>
+                <div class="enable-control">
+                  <span>{{ form[provider.key].enabled ? '已启用' : '未启用' }}</span>
+                  <el-switch v-model="form[provider.key].enabled" :active-value="1" :inactive-value="0" />
+                </div>
+              </div>
 
-                <template v-if="provider.key === 'resend' || provider.key === 'mailersend' || provider.key === 'brevo'">
+              <template v-if="provider.key === 'resend' || provider.key === 'mailersend' || provider.key === 'brevo'">
+                <div class="field-block">
+                  <label>API Key</label>
+                  <el-input v-model="form[provider.key].apiKey" type="password" show-password autocomplete="new-password" />
+                </div>
+              </template>
+
+              <template v-if="provider.key === 'postmark'">
+                <div class="field-grid">
                   <div class="field-block">
-                    <label>API Key</label>
-                    <el-input v-model="form[provider.key].apiKey" type="password" show-password autocomplete="new-password" />
+                    <label>Server Token</label>
+                    <el-input v-model="form.postmark.serverToken" type="password" show-password autocomplete="new-password" />
                   </div>
-                </template>
-
-                <template v-if="provider.key === 'postmark'">
-                  <div class="field-grid">
-                    <div class="field-block">
-                      <label>Server Token</label>
-                      <el-input v-model="form.postmark.serverToken" type="password" show-password autocomplete="new-password" />
-                    </div>
-                    <div class="field-block">
-                      <label>Message Stream</label>
-                      <el-input v-model="form.postmark.messageStream" placeholder="outbound" />
-                    </div>
+                  <div class="field-block">
+                    <label>Message Stream</label>
+                    <el-input v-model="form.postmark.messageStream" placeholder="outbound" />
                   </div>
-                </template>
-
-                <template v-if="provider.key === 'ses'">
-                  <div class="field-grid">
-                    <div class="field-block">
-                      <label>Access Key ID</label>
-                      <el-input v-model="form.ses.accessKeyId" type="password" show-password autocomplete="new-password" />
-                    </div>
-                    <div class="field-block">
-                      <label>Secret Access Key</label>
-                      <el-input v-model="form.ses.secretAccessKey" type="password" show-password autocomplete="new-password" />
-                    </div>
-                    <div class="field-block">
-                      <label>Session Token（可选）</label>
-                      <el-input v-model="form.ses.sessionToken" type="password" show-password autocomplete="new-password" />
-                    </div>
-                    <div class="field-block">
-                      <label>Region</label>
-                      <el-input v-model="form.ses.region" placeholder="us-east-1" />
-                    </div>
-                  </div>
-                </template>
-
-                <el-alert
-                    v-if="form[provider.key].enabled && !providerConfigured(provider.key)"
-                    title="该服务商已经启用，但配置还不完整；发送时会自动跳过。"
-                    type="warning"
-                    :closable="false"
-                    show-icon
-                />
-
-                <div class="provider-danger-row">
-                  <el-button type="danger" plain :disabled="saving" @click="clearProvider(provider.key)">
-                    清除此服务商配置
-                  </el-button>
                 </div>
-              </article>
-            </div>
+              </template>
 
-            <div class="domain-danger-zone">
-              <div>
-                <strong>清除当前域名配置</strong>
-                <p>仅清除 {{ selectedDomain }} 的服务商密钥、启用状态和相关配置。</p>
+              <template v-if="provider.key === 'ses'">
+                <div class="field-grid">
+                  <div class="field-block">
+                    <label>Access Key ID</label>
+                    <el-input v-model="form.ses.accessKeyId" type="password" show-password autocomplete="new-password" />
+                  </div>
+                  <div class="field-block">
+                    <label>Secret Access Key</label>
+                    <el-input v-model="form.ses.secretAccessKey" type="password" show-password autocomplete="new-password" />
+                  </div>
+                  <div class="field-block">
+                    <label>Session Token（可选）</label>
+                    <el-input v-model="form.ses.sessionToken" type="password" show-password autocomplete="new-password" />
+                  </div>
+                  <div class="field-block">
+                    <label>Region</label>
+                    <el-input v-model="form.ses.region" placeholder="us-east-1" />
+                  </div>
+                </div>
+              </template>
+
+              <el-alert
+                  v-if="form[provider.key].enabled && !providerConfigured(provider.key)"
+                  title="该服务商已经启用，但配置还不完整；发送时会自动跳过。"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+              />
+
+              <div class="provider-danger-row">
+                <el-button type="danger" plain :disabled="saving" @click="clearProvider(provider.key)">
+                  清除此服务商配置
+                </el-button>
               </div>
-              <el-button type="danger" plain :loading="saving" @click="clearDomain">确认清除</el-button>
+            </article>
+          </div>
+
+          <div class="domain-danger-zone">
+            <div>
+              <strong>清除当前域名配置</strong>
+              <p>仅清除 {{ selectedDomain }} 的服务商密钥、启用状态和相关配置。</p>
             </div>
-          </section>
-        </main>
-    </div>
+            <el-button type="danger" plain :loading="saving" @click="clearDomain">确认清除</el-button>
+          </div>
+        </section>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button :disabled="saving" @click="closeConfig">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="save">保存配置</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { Icon } from '@iconify/vue';
-
-const emit = defineEmits(['view-change']);
 
 const props = defineProps({
   setting: { type: Object, required: true },
@@ -258,12 +262,12 @@ const defaultPriority = providers.map(item => item.key);
 const normalizedDomains = computed(() => props.domains.map(item => String(item).replace(/^@/, '')));
 const selectedDomain = ref('');
 const dialogVisible = ref(false);
+const dialogScrollRef = ref(null);
 const focusedProvider = ref('');
 const priority = ref([...defaultPriority]);
 const localSaving = ref(false);
 const saving = computed(() => props.loading || localSaving.value);
 const form = reactive(defaultForm());
-let previousScrollTop = 0;
 
 function defaultForm() {
   return {
@@ -297,39 +301,28 @@ function loadForm() {
   priority.value = normalizePriority(props.setting?.providerPriority);
 }
 
-function getSettingsScrollWrap() {
-  if (typeof document === 'undefined') return null;
-  return document.querySelector('.settings-container .el-scrollbar__wrap');
-}
-
-async function showConfig() {
-  const wrap = getSettingsScrollWrap();
-  previousScrollTop = Number(wrap?.scrollTop || 0);
-  dialogVisible.value = true;
-  emit('view-change', true);
-  await nextTick();
-  getSettingsScrollWrap()?.scrollTo({ top: 0, behavior: 'auto' });
-}
-
-async function hideConfig({ restore = true } = {}) {
-  dialogVisible.value = false;
-  emit('view-change', false);
-  await nextTick();
-  if (restore) getSettingsScrollWrap()?.scrollTo({ top: previousScrollTop, behavior: 'auto' });
-}
-
-async function openDialog() {
+function openDialog() {
   loadForm();
   focusedProvider.value = '';
-  await showConfig();
+  dialogVisible.value = true;
+  nextTick(() => dialogScrollRef.value?.scrollTo({ top: 0, behavior: 'auto' }));
 }
 
 async function openProvider(key) {
   loadForm();
   focusedProvider.value = key;
-  await showConfig();
+  dialogVisible.value = true;
   await nextTick();
-  document.getElementById(`provider-config-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  await nextTick();
+  scrollToProvider(key);
+}
+
+function scrollToProvider(key) {
+  const container = dialogScrollRef.value;
+  const target = document.getElementById(`provider-config-${key}`);
+  if (!container || !target) return;
+  const top = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 16;
+  container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   window.setTimeout(() => {
     if (focusedProvider.value === key) focusedProvider.value = '';
   }, 1500);
@@ -338,16 +331,21 @@ async function openProvider(key) {
 async function focusProvider(key) {
   focusedProvider.value = key;
   await nextTick();
-  document.getElementById(`provider-config-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  window.setTimeout(() => {
-    if (focusedProvider.value === key) focusedProvider.value = '';
-  }, 1500);
+  scrollToProvider(key);
+}
+
+function beforeDialogClose(done) {
+  if (saving.value) return;
+  loadForm();
+  focusedProvider.value = '';
+  done();
 }
 
 function closeConfig() {
   if (saving.value) return;
   loadForm();
-  void hideConfig();
+  focusedProvider.value = '';
+  dialogVisible.value = false;
 }
 
 function providerEnabled(key) {
@@ -400,7 +398,7 @@ async function save() {
         [selectedDomain.value]: JSON.parse(JSON.stringify(form))
       }
     });
-    await hideConfig();
+    dialogVisible.value = false;
   } catch (error) {
     console.error('保存服务商配置失败：', error);
   } finally {
@@ -455,7 +453,7 @@ async function clearDomain() {
         [selectedDomain.value]: { clear: true }
       }
     });
-    await hideConfig();
+    dialogVisible.value = false;
   } catch (error) {
     console.error('清除域名服务商配置失败：', error);
   } finally {
@@ -474,12 +472,8 @@ watch(() => props.setting?.providerPriority, value => {
 </script>
 
 <style scoped lang="scss">
-.provider-setting-shell,
-.provider-setting-shell * {
-  box-sizing: border-box;
-}
-
-.provider-setting-shell { width: 100%; min-width: 0; }
+.provider-card,
+.provider-card * { box-sizing: border-box; }
 
 .provider-card {
   width: 100%;
@@ -495,22 +489,7 @@ watch(() => props.setting?.providerPriority, value => {
 .provider-title,
 .provider-summary,
 .provider-form-head,
-.section-heading,
-
-.provider-config-view,
-.provider-config-main,
-.priority-list,
-.priority-item {
-  -webkit-user-drag: none;
-}
-
-.provider-config-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .provider-title { padding: 16px 20px; }
 .title-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .title-copy > span { font-size: 16px; font-weight: 750; }
@@ -519,179 +498,48 @@ watch(() => props.setting?.providerPriority, value => {
 .provider-summary { min-width: 0; flex-wrap: wrap; }
 .domain-block { min-width: 150px; flex: 1 1 180px; }
 .summary-label { color: var(--el-text-color-secondary); font-size: 12px; }
-.summary-domain { max-width: 100%; overflow-wrap: anywhere; font-size: 20px; font-weight: 760; margin-top: 3px; letter-spacing: .2px; }
-.summary-stat {
-  min-width: 78px;
-  padding: 9px 13px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--el-color-primary-light-9) 72%, transparent);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+.summary-domain { max-width: 100%; overflow-wrap: anywhere; font-size: 20px; font-weight: 760; margin-top: 3px; }
+.summary-stat { min-width: 78px; padding: 9px 13px; border-radius: 14px; background: var(--el-color-primary-light-9); display: flex; flex-direction: column; align-items: center; }
 .summary-stat strong { font-size: 18px; line-height: 1.1; }
 .summary-stat span { margin-top: 3px; color: var(--el-text-color-secondary); font-size: 11px; }
 
-.provider-status-grid {
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 9px;
-}
-.provider-chip,
-.provider-select-button {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px;
-  color: var(--el-text-color-primary);
-  background: color-mix(in srgb, var(--el-fill-color-light) 72%, transparent);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
-  cursor: pointer;
-  text-align: left;
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
-}
-.provider-chip:hover,
-.provider-select-button:hover { transform: translateY(-1px); border-color: var(--el-color-primary-light-5); box-shadow: 0 8px 20px rgba(70, 95, 116, .10); }
-.provider-chip.ready,
-.provider-select-button.ready { background: color-mix(in srgb, var(--el-color-success-light-9) 75%, transparent); }
-.provider-chip.warning,
-.provider-select-button.warning { background: color-mix(in srgb, var(--el-color-warning-light-9) 78%, transparent); }
-.provider-mark {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(145deg, #6b91aa, #9388ad);
-}
-.provider-chip-text,
-.provider-select-copy { min-width: 0; display: flex; flex-direction: column; }
+.provider-status-grid { width: 100%; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 9px; }
+.provider-chip { width: 100%; min-width: 0; display: flex; align-items: center; gap: 9px; padding: 10px; color: var(--el-text-color-primary); background: var(--el-fill-color-light); border: 1px solid var(--el-border-color-lighter); border-radius: 14px; cursor: pointer; text-align: left; }
+.provider-chip.ready { background: var(--el-color-success-light-9); }
+.provider-chip.warning { background: var(--el-color-warning-light-9); }
+.provider-mark { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border-radius: 11px; font-weight: 800; color: #fff; background: linear-gradient(145deg, #6b91aa, #9388ad); }
+.provider-chip-text { min-width: 0; display: flex; flex-direction: column; }
 .provider-chip-text strong,
-.provider-chip-text small,
-.provider-select-copy strong,
-.provider-select-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.provider-chip-text small,
-.provider-select-copy small { color: var(--el-text-color-secondary); }
-
-.priority-preview {
-  width: 100%;
-  min-width: 0;
-  padding: 12px 14px;
-  border-radius: 15px;
-  background: color-mix(in srgb, var(--el-fill-color-light) 74%, transparent);
-  overflow: hidden;
-}
-.priority-flow { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; color: var(--el-text-color-secondary); }
-.priority-node { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 8px; border-radius: 999px; background: var(--el-fill-color); font-size: 12px; }
+.provider-chip-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.provider-chip-text small { color: var(--el-text-color-secondary); }
+.priority-preview { width: 100%; min-width: 0; padding: 12px 14px; border-radius: 15px; background: var(--el-fill-color-light); overflow: hidden; }
+.priority-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; color: var(--el-text-color-secondary); }
+.priority-node { padding: 4px 8px; border-radius: 999px; background: var(--el-fill-color); font-size: 12px; }
 .priority-node.active { color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-weight: 650; }
 
-.provider-config-view {
-  width: 100%;
-  min-width: 0;
-  min-height: 100%;
-  color: var(--el-text-color-primary);
-  background:
-      radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--el-color-primary) 18%, transparent), transparent 32%),
-      radial-gradient(circle at 88% 10%, rgba(143, 113, 160, .14), transparent 30%),
-      var(--el-bg-color-page);
-}
-
-
-.provider-config-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  flex: 0 0 auto;
-  min-height: 66px;
-  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
-  border-bottom: 1px solid color-mix(in srgb, var(--el-border-color) 78%, transparent);
-  background: color-mix(in srgb, var(--el-bg-color) 91%, transparent);
-  backdrop-filter: blur(18px) saturate(118%);
-}
-.back-button { flex: 0 0 auto; }
-.config-header-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.config-header-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
-.config-header-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--el-text-color-secondary); }
-
-.provider-config-main {
-  width: 100%;
-  min-width: 0;
-  overflow: visible;
-  touch-action: auto;
-  padding: 20px max(16px, env(safe-area-inset-right)) max(72px, calc(40px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-left));
-}
-
-.provider-config-main > * { width: min(860px, 100%); margin-left: auto; margin-right: auto; box-sizing: border-box; }
-
-.config-intro {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 15px 16px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--el-color-primary-light-9), color-mix(in srgb, var(--el-color-success-light-9) 65%, transparent));
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, transparent);
-}
+.dialog-title { min-width: 0; display: flex; flex-direction: column; }
+.dialog-title strong { font-size: 18px; }
+.dialog-title small { color: var(--el-text-color-secondary); margin-top: 2px; }
+.provider-dialog-scroll { height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y pinch-zoom; padding: 18px 20px 28px; }
+.config-intro { display: flex; align-items: flex-start; gap: 12px; padding: 15px 16px; border-radius: 16px; background: linear-gradient(135deg, var(--el-color-primary-light-9), var(--el-color-success-light-9)); border: 1px solid var(--el-border-color-lighter); }
 .config-intro p { margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.65; }
-
-.config-section {
-  margin-top: 16px;
-  padding: 18px;
-  border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, var(--el-border-color));
-  background: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
-  box-shadow: 0 12px 34px rgba(49, 69, 84, .08);
-}
+.config-section { margin-top: 16px; padding: 18px; border-radius: 18px; border: 1px solid var(--el-border-color); background: var(--el-bg-color); box-shadow: 0 10px 28px rgba(49, 69, 84, .07); }
 .section-heading { margin-bottom: 14px; }
 .section-heading h2 { margin: 0; font-size: 16px; }
 .section-heading p { margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.55; }
-
 .priority-list { display: flex; flex-direction: column; gap: 8px; }
-.priority-item {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 13px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: color-mix(in srgb, var(--el-bg-color) 92%, transparent);
-  transition: border-color .15s ease, background .15s ease;
-  touch-action: pan-y pinch-zoom;
-}
+.priority-item { min-width: 0; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 13px; border: 1px solid var(--el-border-color-lighter); background: var(--el-bg-color); }
 .priority-number { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 9px; background: var(--el-color-primary-light-9); color: var(--el-color-primary); font-weight: 750; }
 .priority-provider { min-width: 0; padding: 0; border: 0; color: inherit; background: transparent; display: flex; flex-direction: column; text-align: left; cursor: pointer; }
 .priority-provider strong,
 .priority-provider small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .priority-provider small { color: var(--el-text-color-secondary); font-size: 11px; }
 .priority-actions { display: flex; gap: 4px; }
-
 .provider-forms-list { display: flex; flex-direction: column; gap: 12px; }
-.provider-form {
-  margin: 0;
-  padding: 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--el-bg-color) 94%, transparent);
-  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-  scroll-margin: 92px;
-}
+.provider-form { margin: 0; padding: 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 16px; background: var(--el-bg-color); transition: border-color .2s ease, box-shadow .2s ease; }
 .provider-form.ready { border-color: color-mix(in srgb, var(--el-color-success) 35%, var(--el-border-color-lighter)); }
 .provider-form.warning { border-color: color-mix(in srgb, var(--el-color-warning) 40%, var(--el-border-color-lighter)); }
-.provider-form.focused {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-color-primary) 14%, transparent), 0 16px 36px rgba(54, 77, 96, .13);
-  transform: translateY(-1px);
-}
+.provider-form.focused { border-color: var(--el-color-primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-color-primary) 14%, transparent); }
 .provider-identity { min-width: 0; display: flex; align-items: flex-start; gap: 11px; }
 .provider-identity > div { min-width: 0; }
 .provider-form-head { align-items: flex-start; margin-bottom: 18px; }
@@ -702,42 +550,27 @@ watch(() => props.setting?.providerPriority, value => {
 .field-block label { font-size: 13px; color: var(--el-text-color-regular); font-weight: 650; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .provider-danger-row { display: flex; justify-content: flex-end; margin-top: 18px; }
-
-.domain-danger-zone {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 18px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--el-color-danger) 30%, var(--el-border-color));
-  border-radius: 15px;
-  background: color-mix(in srgb, var(--el-color-danger-light-9) 58%, transparent);
-}
+.domain-danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; padding: 16px; border: 1px solid color-mix(in srgb, var(--el-color-danger) 30%, var(--el-border-color)); border-radius: 15px; background: var(--el-color-danger-light-9); }
 .domain-danger-zone strong { color: var(--el-color-danger); }
-.domain-danger-zone p { margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.55; }
+.domain-danger-zone p { margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 12px; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: 10px; }
 
-
-@media (max-width: 860px) {
-  .provider-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+:global(.provider-config-dialog.el-dialog) { height: 90vh; height: 90dvh; max-height: 900px; margin: 5vh auto 0 !important; margin: 5dvh auto 0 !important; display: flex; flex-direction: column; overflow: hidden; border-radius: 20px; }
+:global(.provider-config-dialog .el-dialog__header) { flex: 0 0 auto; margin: 0; padding: 16px 20px; border-bottom: 1px solid var(--el-border-color-lighter); }
+:global(.provider-config-dialog .el-dialog__body) { flex: 1 1 auto; min-height: 0; padding: 0; overflow: hidden; }
+:global(.provider-config-dialog .el-dialog__footer) { flex: 0 0 auto; padding: 12px 20px; border-top: 1px solid var(--el-border-color-lighter); }
 
 @media (max-width: 600px) {
   .provider-title { align-items: flex-start; }
-  .provider-title .el-tag { flex: 0 0 auto; }
   .card-content { padding: 16px; }
   .provider-summary { align-items: stretch; }
   .provider-summary .el-button { width: 100%; }
   .summary-stat { flex: 1 1 78px; }
   .provider-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .provider-chip { padding: 9px; }
-  .provider-chip-text small { font-size: 11px; }
   .priority-flow > svg { display: none; }
   .priority-node { flex: 1 1 calc(50% - 6px); text-align: center; }
-  .provider-config-header { gap: 8px; }
-  .provider-config-header > .el-button:last-child { min-width: 64px; }
-  .provider-config-main { padding-top: 14px; }
-  .config-section { padding: 15px; border-radius: 16px; }
+  .provider-dialog-scroll { padding: 14px 12px 24px; }
+  .config-section { padding: 14px; border-radius: 15px; }
   .section-heading { align-items: flex-start; }
   .priority-item { grid-template-columns: 28px minmax(0, 1fr) auto; padding: 9px 8px; }
   .priority-status { display: none; }
@@ -749,6 +582,7 @@ watch(() => props.setting?.providerPriority, value => {
   .field-grid { grid-template-columns: 1fr; }
   .provider-danger-row .el-button { width: 100%; }
   .domain-danger-zone { flex-direction: column; align-items: stretch; }
-  .domain-danger-zone .el-button { width: 100%; margin: 0; }
+  .domain-danger-zone .el-button { width: 100%; }
+  :global(.provider-config-dialog.el-dialog) { width: calc(100vw - 12px) !important; height: 94vh; height: 94dvh; margin: 3vh auto 0 !important; margin: 3dvh auto 0 !important; border-radius: 16px; }
 }
 </style>
