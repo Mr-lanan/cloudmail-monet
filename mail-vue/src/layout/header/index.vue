@@ -41,24 +41,24 @@
               <el-tag>{{ userStore.user.role.name }}</el-tag>
             </div>
             <div class="action-info">
-              <div>
-                <span style="margin-right: 10px">{{ $t('sendCount') }}</span>
-                <span style="margin-right: 10px">{{ $t('accountCount') }}</span>
-              </div>
-              <div>
-                <div>
-                  <span v-if="sendCount" style="margin-right: 5px">{{ sendCount }}</span>
-                  <el-tag v-if="!hasPerm('email:send')">{{ sendType }}</el-tag>
-                  <el-tag v-else>{{ sendType }}</el-tag>
+              <div class="quota-row">
+                <span class="quota-label">{{ $t('sendCount') }}</span>
+                <div class="quota-value">
+                  <span v-if="sendCount" class="quota-count">{{ sendCount }}</span>
+                  <el-tag round>{{ sendType }}</el-tag>
                 </div>
-                <div>
-                  <el-tag v-if="settingStore.settings.manyEmail || settingStore.settings.addEmail">
+              </div>
+              <div class="quota-row">
+                <span class="quota-label">{{ $t('accountCount') }}</span>
+                <div class="quota-value">
+                  <el-tag v-if="settingStore.settings.manyEmail || settingStore.settings.addEmail" round>
                     {{ $t('disabled') }}
                   </el-tag>
-                  <span v-else-if="accountCount && hasPerm('account:add')"
-                        style="margin-right: 5px">{{ $t('totalUserAccount', {msg: accountCount}) }}</span>
-                  <el-tag v-else-if="!accountCount && hasPerm('account:add')">{{ $t('unlimited') }}</el-tag>
-                  <el-tag v-else-if="!hasPerm('account:add')">{{ $t('unauthorized') }}</el-tag>
+                  <span v-else-if="accountCount && hasPerm('account:add')" class="quota-count">
+                    {{ $t('totalUserAccount', {msg: accountCount}) }}
+                  </span>
+                  <el-tag v-else-if="!accountCount && hasPerm('account:add')" round>{{ $t('unlimited') }}</el-tag>
+                  <el-tag v-else-if="!hasPerm('account:add')" round>{{ $t('unauthorized') }}</el-tag>
                 </div>
               </div>
             </div>
@@ -256,102 +256,258 @@ function formatName(email) {
 
 </script>
 <style>
-.detail-dropdown {
-  color: var(--el-text-color-primary) !important;
+.detail-dropdown.el-popper,
+.el-popper.detail-dropdown {
+  --el-popper-border-radius: 24px;
   z-index: 5000 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--el-border-color)) !important;
+  border-radius: 24px !important;
+  background:
+      radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--el-color-primary) 18%, transparent), transparent 38%),
+      radial-gradient(circle at 94% 18%, rgba(143, 113, 160, .16), transparent 34%),
+      color-mix(in srgb, var(--el-bg-color) 94%, transparent) !important;
+  box-shadow:
+      0 24px 70px rgba(35, 49, 62, .22),
+      0 4px 18px rgba(75, 94, 112, .12) !important;
+  backdrop-filter: blur(24px) saturate(125%);
+  -webkit-backdrop-filter: blur(24px) saturate(125%);
+}
+
+.detail-dropdown .el-popper__arrow::before {
+  border-color: color-mix(in srgb, var(--el-color-primary) 18%, var(--el-border-color)) !important;
+  background: color-mix(in srgb, var(--el-bg-color) 96%, transparent) !important;
+}
+
+.detail-dropdown .el-scrollbar,
+.detail-dropdown .el-scrollbar__wrap,
+.detail-dropdown .el-dropdown-menu,
+.detail-dropdown .el-dropdown__list {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
 }
 </style>
 <style lang="scss" scoped>
 
-:deep(.el-popper.is-pure) {
-  border-radius: 6px;
+.user-details {
+  position: relative;
+  width: min(340px, calc(100vw - 28px));
+  max-width: 100%;
+  padding: 26px 22px 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
 }
 
-.user-details {
-  width: 250px;
-  font-size: 14px;
+.user-details::before {
+  content: '';
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  left: -72px;
+  top: -86px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  filter: blur(2px);
+}
+
+.user-details::after {
+  content: '';
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  right: -78px;
+  top: 48px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: rgba(126, 156, 137, .12);
+}
+
+.details-avatar,
+.user-name,
+.detail-email,
+.detail-user-type,
+.action-info,
+.logout {
+  position: relative;
+  z-index: 1;
+}
+
+.user-details .details-avatar {
+  width: 64px;
+  height: 64px;
+  margin: 0 0 14px;
   display: grid;
-  grid-template-columns: 1fr;
-  justify-items: center;
+  place-items: center;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 30%, var(--el-border-color));
+  color: var(--el-color-primary);
+  background:
+      linear-gradient(145deg,
+        color-mix(in srgb, var(--el-color-primary-light-8) 88%, var(--el-bg-color)),
+        color-mix(in srgb, #9a8cad 22%, var(--el-bg-color)));
+  box-shadow: 0 12px 28px rgba(67, 87, 105, .17);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: .5px;
+}
 
-  .user-name {
-    font-weight: bold;
-    margin-top: 10px;
-    padding-left: 20px;
-    padding-right: 20px;
-    width: 250px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    text-align: center;
+.user-details .user-name {
+  width: 100%;
+  padding: 0 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 760;
+  letter-spacing: .2px;
+}
+
+.user-details .detail-email {
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 7px 13px;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  border-radius: 999px;
+  color: var(--el-text-color-secondary);
+  background: color-mix(in srgb, var(--el-fill-color-light) 72%, transparent);
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.user-details .detail-email:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  transform: translateY(-1px);
+}
+
+.user-details .detail-user-type {
+  margin-top: 10px;
+}
+
+.user-details .detail-user-type :deep(.el-tag) {
+  min-height: 28px;
+  padding-inline: 13px;
+  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--el-border-color));
+  background: color-mix(in srgb, var(--el-color-primary-light-9) 76%, transparent);
+}
+
+.user-details .action-info {
+  width: 100%;
+  margin-top: 20px;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 14%, var(--el-border-color));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--el-fill-color-light) 58%, transparent);
+}
+
+.user-details .quota-row {
+  min-height: 48px;
+  padding: 9px 11px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--el-bg-color) 80%, transparent);
+}
+
+.user-details .quota-label {
+  flex: 0 0 auto;
+  color: var(--el-text-color-regular);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.user-details .quota-value {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  text-align: right;
+}
+
+.user-details .quota-count {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.user-details .quota-value :deep(.el-tag) {
+  min-height: 28px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--el-color-primary) 80%, var(--el-text-color-primary));
+  border-color: color-mix(in srgb, var(--el-color-primary) 24%, var(--el-border-color));
+  background: color-mix(in srgb, var(--el-color-primary-light-9) 75%, transparent);
+}
+
+.user-details .logout {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.user-details .logout :deep(.el-button) {
+  width: 100%;
+  height: 46px;
+  margin: 0;
+  border: 0;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  background: linear-gradient(110deg, #7195ad, #9588aa 52%, #7aa08e);
+  box-shadow: 0 12px 28px rgba(77, 95, 121, .22);
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+.user-details .logout :deep(.el-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(77, 95, 121, .28);
+  filter: saturate(1.06) brightness(1.03);
+}
+
+@media (max-width: 420px) {
+  .user-details {
+    width: min(320px, calc(100vw - 20px));
+    padding: 22px 16px 16px;
   }
 
-  .detail-user-type {
-    margin-top: 10px;
+  .user-details .action-info {
+    padding: 8px;
   }
 
-  .action-info {
-    width: 100%;
-    display: grid;
-    grid-template-columns: auto auto;
-    margin-top: 10px;
-
-    > div:first-child {
-      display: grid;
-      align-items: center;
-      gap: 10px;
-    }
-
-    > div:last-child {
-      display: grid;
-      gap: 10px;
-      text-align: center;
-
-      > div {
-        display: flex;
-        align-items: center;
-      }
-    }
-  }
-
-  .detail-email {
-    padding-left: 20px;
-    padding-right: 20px;
-    width: 250px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    text-align: center;
-    color: var(--regular-text-color);
-    cursor: pointer;
-  }
-
-  .logout {
-    margin-top: 20px;
-    width: 100%;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-bottom: 10px;
-
-    .el-button {
-      border-radius: 6px;
-      height: 28px;
-      width: 100%;
-    }
-  }
-
-  .details-avatar {
-    margin-top: 20px;
-    height: 40px;
-    width: 40px;
-    background: var(--el-bg-color);
-    color: var(--el-text-color-primary);
-    border: 1px solid var(--dark-border);
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
+  .user-details .quota-row {
+    padding: 8px 9px;
+    gap: 9px;
   }
 }
 
@@ -516,18 +672,5 @@ function formatName(email) {
   border-color: color-mix(in srgb, var(--el-color-primary) 28%, var(--el-border-color));
   background: linear-gradient(145deg, var(--el-bg-color), var(--el-fill-color-light));
   font-weight: 750;
-}
-.user-details {
-  padding-top: 4px;
-  border-radius: 16px;
-}
-.user-details .details-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: linear-gradient(145deg, var(--el-color-primary-light-9), var(--el-fill-color-light));
-  color: var(--el-color-primary);
-  border-color: var(--el-color-primary-light-7);
-  font-weight: 800;
 }
 </style>
